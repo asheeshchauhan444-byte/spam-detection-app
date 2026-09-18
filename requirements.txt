@@ -4,3 +4,4 @@ numpy
 pdfplumber
 matplotlib
 scikit-learn
+openpyxl
