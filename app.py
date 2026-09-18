@@ -1,552 +1,133 @@
 # ============================================================
-#        SMS SPAM / HAM DETECTION MODEL
-#        PDF DATASET + MACHINE LEARNING
-#        BEGINNER FRIENDLY COMPLETE CODE
+# SMS SPAM / HAM DETECTOR
+# Streamlit + Machine Learning
 # ============================================================
 
-
-# ============================================================
-# 1. REQUIRED LIBRARIES
-# ============================================================
-
-import sys
-import subprocess
-import os
-import re
-
-
-# Missing libraries automatically install karo
-
-libraries = {
-    "pandas": "pandas",
-    "numpy": "numpy",
-    "pdfplumber": "pdfplumber",
-    "sklearn": "scikit-learn",
-    "matplotlib": "matplotlib",
-    "openpyxl": "openpyxl"
-}
-
-
-for import_name, package_name in libraries.items():
-
-    try:
-
-        __import__(import_name)
-
-    except ImportError:
-
-        print("Installing:", package_name)
-
-        subprocess.check_call([
-            sys.executable,
-            "-m",
-            "pip",
-            "install",
-            package_name
-        ])
-
-
-# ============================================================
-# 2. IMPORT
-# ============================================================
-
+import streamlit as st
 import pandas as pd
 import numpy as np
 import pdfplumber
+import re
+import os
+
 import matplotlib.pyplot as plt
 
-from IPython.display import display, HTML
-
 from sklearn.model_selection import train_test_split
-
 from sklearn.pipeline import Pipeline
-
 from sklearn.feature_extraction.text import TfidfVectorizer
-
 from sklearn.linear_model import LogisticRegression
-
 from sklearn.metrics import accuracy_score
-from sklearn.metrics import classification_report
 
 
 # ============================================================
-# 3. PDF PATH
+# PAGE SETTINGS
 # ============================================================
 
-# IMPORTANT:
-# Yahan apni PDF ka path diya gaya hai.
-
-pdf_file = r"C:\Users\Dev computer\Downloads\SMSSpamCollection.pdf"
-
-
-print("=" * 70)
-print("          SMS SPAM / HAM DETECTION MODEL")
-print("=" * 70)
-
-
-print("\nPDF check ho rahi hai...")
-
-print(pdf_file)
-
-
-# ============================================================
-# 4. CHECK PDF EXISTS
-# ============================================================
-
-if not os.path.exists(pdf_file):
-
-    print("\n❌ PDF nahi mili.")
-
-    print("\nCheck this path:")
-
-    print(pdf_file)
-
-    raise FileNotFoundError(
-        "PDF file path galat hai."
-    )
-
-
-print("\n✅ PDF mil gayi!")
-
-
-# ============================================================
-# 5. READ PDF
-# ============================================================
-
-print("\nPDF read ho rahi hai...")
-
-print("Please wait...")
-
-
-all_text = ""
-
-
-with pdfplumber.open(pdf_file) as pdf:
-
-    total_pages = len(pdf.pages)
-
-    print("\nTotal Pages:", total_pages)
-
-
-    for page_number, page in enumerate(
-        pdf.pages,
-        start=1
-    ):
-
-        text = page.extract_text()
-
-
-        if text:
-
-            all_text += "\n" + text
-
-
-print("\n✅ PDF reading complete!")
-
-
-# ============================================================
-# 6. CHECK TEXT
-# ============================================================
-
-if not all_text.strip():
-
-    raise ValueError(
-
-        """
-❌ PDF se text nahi mila.
-
-Aapki PDF scanned/image based ho sakti hai.
-OCR ki zarurat hogi.
-"""
-    )
-
-
-print(
-    "Total extracted characters:",
-    len(all_text)
+st.set_page_config(
+    page_title="SMS Spam Detector",
+    page_icon="📱",
+    layout="wide"
 )
 
 
 # ============================================================
-# 7. SHOW SAMPLE
+# CUSTOM CSS
 # ============================================================
 
-print("\n" + "=" * 70)
+st.markdown("""
+<style>
 
-print("PDF TEXT SAMPLE")
+.main {
+    background-color: #f5f7fb;
+}
 
-print("=" * 70)
+.title {
+    text-align: center;
+    font-size: 42px;
+    font-weight: 800;
+    margin-bottom: 5px;
+}
 
-print(
-    all_text[:2500]
+.subtitle {
+    text-align: center;
+    color: #666;
+    font-size: 18px;
+    margin-bottom: 30px;
+}
+
+.result-box {
+    padding: 25px;
+    border-radius: 18px;
+    text-align: center;
+    margin-top: 20px;
+}
+
+.spam-box {
+    background-color: #ffe5e5;
+    border: 2px solid #ff4b4b;
+}
+
+.ham-box {
+    background-color: #e5fff0;
+    border: 2px solid #00a86b;
+}
+
+.result-text {
+    font-size: 36px;
+    font-weight: 800;
+}
+
+.small-text {
+    font-size: 16px;
+}
+
+.keyword-box {
+    background-color: #f1f3f6;
+    padding: 10px;
+    border-radius: 10px;
+    margin: 4px;
+}
+
+div[data-testid="stMetric"] {
+    background-color: white;
+    padding: 15px;
+    border-radius: 12px;
+    box-shadow: 0px 2px 8px rgba(0,0,0,0.08);
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+
+# ============================================================
+# TITLE
+# ============================================================
+
+st.markdown(
+    '<div class="title">📱 SMS Spam Detector</div>',
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    '<div class="subtitle">'
+    'Machine Learning based Spam & Ham Message Detection'
+    '</div>',
+    unsafe_allow_html=True
 )
 
 
 # ============================================================
-# 8. CREATE LINES
+# PDF FILE LOCATION
 # ============================================================
 
-lines = []
-
-for line in all_text.splitlines():
-
-    line = line.strip()
-
-    if line:
-
-        lines.append(line)
-
-
-print("\nTotal lines:", len(lines))
+PDF_FILE = "SMSSpamCollection.pdf"
 
 
 # ============================================================
-# 9. FUNCTION:
-#    FIND SPAM / HAM
+# KEYWORDS
 # ============================================================
 
-def get_label(line):
-
-    line = str(line).strip()
-
-    lower = line.lower()
-
-
-    # HAM
-
-    if re.match(
-        r"^ham[\s\t]+",
-        lower
-    ):
-
-        return "ham"
-
-
-    # SPAM
-
-    if re.match(
-        r"^spam[\s\t]+",
-        lower
-    ):
-
-        return "spam"
-
-
-    return None
-
-
-# ============================================================
-# 10. FUNCTION:
-#     REMOVE LABEL
-# ============================================================
-
-def get_message(line):
-
-    line = str(line).strip()
-
-
-    line = re.sub(
-
-        r"^(ham|spam)[\s\t]+",
-
-        "",
-
-        line,
-
-        flags=re.IGNORECASE
-    )
-
-
-    return line.strip()
-
-
-# ============================================================
-# 11. CREATE DATASET
-# ============================================================
-
-messages = []
-
-labels = []
-
-
-for line in lines:
-
-    label = get_label(line)
-
-
-    if label is not None:
-
-        message = get_message(line)
-
-
-        if len(message) > 2:
-
-            messages.append(message)
-
-            labels.append(label)
-
-
-# ============================================================
-# 12. DATAFRAME
-# ============================================================
-
-data = pd.DataFrame({
-
-    "message": messages,
-
-    "label": labels
-})
-
-
-print("\n" + "=" * 70)
-
-print("DATASET RESULT")
-
-print("=" * 70)
-
-
-print(
-    "Messages found:",
-    len(data)
-)
-
-
-# ============================================================
-# 13. IF DATA NOT FOUND
-# ============================================================
-
-if len(data) == 0:
-
-    print(
-        """
-        
-❌ Spam/Ham data nahi mila.
-
-PDF ka format check karo.
-
-Expected format:
-
-ham    Hello how are you?
-spam   Congratulations you won a prize!
-
-"""
-    )
-
-    raise ValueError(
-        "PDF dataset format detect nahi hua."
-    )
-
-
-# ============================================================
-# 14. CLEAN DATA
-# ============================================================
-
-data["message"] = (
-
-    data["message"]
-
-    .fillna("")
-
-    .astype(str)
-
-    .str.strip()
-)
-
-
-data["label"] = (
-
-    data["label"]
-
-    .astype(str)
-
-    .str.lower()
-
-    .str.strip()
-)
-
-
-# Empty messages remove
-
-data = data[
-    data["message"].str.len() > 2
-]
-
-
-# Duplicate messages remove
-
-data = data.drop_duplicates(
-    subset=["message"]
-)
-
-
-data = data.reset_index(
-    drop=True
-)
-
-
-# ============================================================
-# 15. SPAM = 1
-#     HAM  = 0
-# ============================================================
-
-data["spam_ham"] = np.where(
-
-    data["label"] == "spam",
-
-    1,
-
-    0
-)
-
-
-# ============================================================
-# 16. COUNT
-# ============================================================
-
-spam_count = (
-
-    data["spam_ham"] == 1
-
-).sum()
-
-
-ham_count = (
-
-    data["spam_ham"] == 0
-
-).sum()
-
-
-total_count = len(data)
-
-
-spam_percent = (
-
-    spam_count /
-    total_count
-
-) * 100
-
-
-ham_percent = (
-
-    ham_count /
-    total_count
-
-) * 100
-
-
-print("\n" + "=" * 70)
-
-print("SMS SUMMARY")
-
-print("=" * 70)
-
-
-print(
-    "Total SMS :",
-    total_count
-)
-
-
-print(
-    "SPAM      :",
-    spam_count
-)
-
-
-print(
-    "HAM       :",
-    ham_count
-)
-
-
-print(
-    "\nSPAM :",
-    round(spam_percent, 2),
-    "%"
-)
-
-
-print(
-    "HAM  :",
-    round(ham_percent, 2),
-    "%"
-)
-
-
-# ============================================================
-# 17. SMALL CIRCLE PIE CHART
-# ============================================================
-
-plt.figure(
-    figsize=(3, 3)
-)
-
-
-plt.pie(
-
-    [
-        spam_count,
-        ham_count
-    ],
-
-    labels=[
-
-        f"SPAM\n{spam_percent:.1f}%",
-
-        f"HAM\n{ham_percent:.1f}%"
-
-    ],
-
-    autopct="%1.1f%%",
-
-    startangle=90
-)
-
-
-plt.title(
-    "Spam vs Ham",
-    fontsize=11
-)
-
-
-plt.axis("equal")
-
-plt.tight_layout()
-
-plt.show()
-
-
-# ============================================================
-# 18. SHOW DATA
-# ============================================================
-
-print("\n" + "=" * 70)
-
-print("SAMPLE DATA")
-
-print("=" * 70)
-
-
-display(
-
-    data[
-        [
-            "message",
-            "label",
-            "spam_ham"
-        ]
-    ].head(10)
-
-)
-
-
-# ============================================================
-# 19. KEYWORDS
-# ============================================================
-
-keywords = [
+KEYWORDS = [
 
     "free",
     "winner",
@@ -590,361 +171,482 @@ keywords = [
     "password",
     "verify",
     "verification"
+
 ]
 
 
 # ============================================================
-# 20. KEYWORD DETECTION
+# PDF DATA READER
 # ============================================================
 
-def keyword_value(message, keyword):
+@st.cache_data
+def read_pdf_data(pdf_file):
 
-    message = str(
-        message
-    ).lower()
+    messages = []
+    labels = []
+
+    try:
+
+        with pdfplumber.open(pdf_file) as pdf:
+
+            for page in pdf.pages:
+
+                text = page.extract_text()
+
+                if not text:
+                    continue
+
+                lines = text.splitlines()
+
+                for line in lines:
+
+                    line = line.strip()
+
+                    if not line:
+                        continue
 
 
-    keyword = str(
-        keyword
-    ).lower()
+                    # ------------------------------
+                    # SPAM
+                    # ------------------------------
+
+                    spam_match = re.match(
+                        r"^spam[\s\t]+(.+)$",
+                        line,
+                        re.IGNORECASE
+                    )
+
+                    if spam_match:
+
+                        message = spam_match.group(1).strip()
+
+                        if message:
+
+                            messages.append(message)
+                            labels.append("spam")
+
+                        continue
 
 
-    if keyword in message:
+                    # ------------------------------
+                    # HAM
+                    # ------------------------------
 
-        return 1
+                    ham_match = re.match(
+                        r"^ham[\s\t]+(.+)$",
+                        line,
+                        re.IGNORECASE
+                    )
 
-    else:
+                    if ham_match:
 
-        return 0
+                        message = ham_match.group(1).strip()
+
+                        if message:
+
+                            messages.append(message)
+                            labels.append("ham")
 
 
-# ============================================================
-# 21. CREATE KEYWORD 0/1 COLUMNS
-# ============================================================
+    except Exception as e:
 
-for keyword in keywords:
+        return pd.DataFrame(
+            columns=["message", "label"]
+        ), str(e)
 
-    column = (
 
-        "kw_"
+    df = pd.DataFrame({
 
-        +
+        "message": messages,
 
-        keyword
+        "label": labels
 
-        .replace(
-            " ",
-            "_"
+    })
+
+
+    if not df.empty:
+
+        df["message"] = (
+            df["message"]
+            .astype(str)
+            .str.strip()
         )
+
+        df["label"] = (
+            df["label"]
+            .astype(str)
+            .str.lower()
+            .str.strip()
+        )
+
+        df = df[
+            df["message"].str.len() > 2
+        ]
+
+        df = df.drop_duplicates(
+            subset=["message"]
+        )
+
+        df = df.reset_index(
+            drop=True
+        )
+
+
+    return df, None
+
+
+# ============================================================
+# LOAD DATASET
+# ============================================================
+
+if not os.path.exists(PDF_FILE):
+
+    st.error(
+        "❌ SMSSpamCollection.pdf GitHub repository "
+        "mein nahi mili."
+    )
+
+    st.info(
+        "PDF ko app.py ke same folder mein upload karo."
+    )
+
+    st.stop()
+
+
+with st.spinner(
+    "📄 SMS dataset load ho raha hai..."
+):
+
+    df, pdf_error = read_pdf_data(
+        PDF_FILE
     )
 
 
-    data[column] = data["message"].apply(
+if pdf_error:
 
-        lambda x:
+    st.error(
+        "PDF read karte time error: "
+        + str(pdf_error)
+    )
 
-        keyword_value(
-            x,
-            keyword
-        )
+    st.stop()
+
+
+if df.empty:
+
+    st.error(
+        "❌ PDF se Spam/Ham messages nahi mile."
+    )
+
+    st.warning(
+        "PDF mein dataset ka format "
+        "ham/spam + message hona chahiye."
+    )
+
+    st.stop()
+
+
+# ============================================================
+# CREATE BINARY LABEL
+# ============================================================
+
+df["binary"] = np.where(
+    df["label"] == "spam",
+    1,
+    0
+)
+
+
+# ============================================================
+# DATA SUMMARY
+# ============================================================
+
+total_sms = len(df)
+
+spam_count = int(
+    (df["binary"] == 1).sum()
+)
+
+ham_count = int(
+    (df["binary"] == 0).sum()
+)
+
+spam_percent = (
+    spam_count / total_sms
+) * 100
+
+ham_percent = (
+    ham_count / total_sms
+) * 100
+
+
+# ============================================================
+# TRAIN MODEL
+# ============================================================
+
+@st.cache_resource
+def train_model(messages, labels):
+
+    X_train, X_test, y_train, y_test = train_test_split(
+
+        messages,
+
+        labels,
+
+        test_size=0.20,
+
+        random_state=42,
+
+        stratify=labels
 
     )
 
 
-# ============================================================
-# 22. TRAINING DATA
-# ============================================================
+    model = Pipeline([
 
-X = data["message"]
+        (
+            "tfidf",
 
-y = data["spam_ham"]
+            TfidfVectorizer(
 
+                lowercase=True,
 
-# ============================================================
-# 23. TRAIN / TEST SPLIT
-# ============================================================
+                strip_accents="unicode",
 
-X_train, X_test, y_train, y_test = train_test_split(
+                ngram_range=(1, 2),
 
-    X,
+                min_df=1,
 
-    y,
+                max_features=20000
 
-    test_size=0.20,
+            )
+        ),
 
-    random_state=42,
+        (
+            "classifier",
 
-    stratify=y
-)
+            LogisticRegression(
 
+                max_iter=3000,
 
-# ============================================================
-# 24. MACHINE LEARNING MODEL
-# ============================================================
+                class_weight="balanced",
 
-model = Pipeline([
+                random_state=42
 
-    (
-
-        "tfidf",
-
-        TfidfVectorizer(
-
-            lowercase=True,
-
-            ngram_range=(1, 2),
-
-            min_df=1,
-
-            max_features=15000
-
+            )
         )
 
-    ),
+    ])
 
 
-    (
-
-        "classifier",
-
-        LogisticRegression(
-
-            max_iter=3000,
-
-            class_weight="balanced",
-
-            random_state=42
-
-        )
-
+    model.fit(
+        X_train,
+        y_train
     )
 
-])
+
+    test_prediction = model.predict(
+        X_test
+    )
 
 
-# ============================================================
-# 25. TRAIN MODEL
-# ============================================================
-
-print("\n" + "=" * 70)
-
-print("MODEL TRAINING")
-
-print("=" * 70)
-
-
-print(
-    "Model training started..."
-)
-
-
-model.fit(
-
-    X_train,
-
-    y_train
-)
-
-
-print(
-    "✅ Model trained successfully!"
-)
-
-
-# ============================================================
-# 26. TEST MODEL
-# ============================================================
-
-prediction = model.predict(
-    X_test
-)
-
-
-accuracy = accuracy_score(
-
-    y_test,
-
-    prediction
-)
-
-
-print("\n" + "=" * 70)
-
-print("MODEL ACCURACY")
-
-print("=" * 70)
-
-
-print(
-
-    round(
-        accuracy * 100,
-        2
-    ),
-
-    "%"
-)
-
-
-print("\nClassification Report:")
-
-
-print(
-
-    classification_report(
+    accuracy = accuracy_score(
 
         y_test,
 
-        prediction
+        test_prediction
 
     )
+
+
+    return model, accuracy
+
+
+with st.spinner(
+    "🤖 Machine Learning model train ho raha hai..."
+):
+
+    model, accuracy = train_model(
+
+        df["message"],
+
+        df["binary"]
+
+    )
+
+
+# ============================================================
+# TOP METRICS
+# ============================================================
+
+st.markdown("## 📊 Dataset Overview")
+
+
+col1, col2, col3, col4 = st.columns(4)
+
+
+with col1:
+
+    st.metric(
+        "Total SMS",
+        f"{total_sms:,}"
+    )
+
+
+with col2:
+
+    st.metric(
+        "Spam",
+        f"{spam_count:,}"
+    )
+
+
+with col3:
+
+    st.metric(
+        "Ham",
+        f"{ham_count:,}"
+    )
+
+
+with col4:
+
+    st.metric(
+        "Model Accuracy",
+        f"{accuracy * 100:.2f}%"
+    )
+
+
+# ============================================================
+# DATASET PIE CHART
+# ============================================================
+
+st.markdown("## 📊 Dataset Spam vs Ham")
+
+
+col_left, col_right = st.columns(
+    [1, 1]
+)
+
+
+with col_left:
+
+    fig, ax = plt.subplots(
+        figsize=(4, 4)
+    )
+
+
+    ax.pie(
+
+        [
+            spam_count,
+            ham_count
+        ],
+
+        labels=[
+
+            f"SPAM\n{spam_percent:.1f}%",
+
+            f"HAM\n{ham_percent:.1f}%"
+
+        ],
+
+        autopct="%1.1f%%",
+
+        startangle=90
+
+    )
+
+
+    ax.set_title(
+        "Spam vs Ham",
+        fontsize=13
+    )
+
+
+    ax.axis("equal")
+
+
+    st.pyplot(
+        fig,
+        use_container_width=False
+    )
+
+
+with col_right:
+
+    st.markdown(
+        f"""
+        ### Dataset Result
+
+        **SPAM:** {spam_percent:.2f}%
+
+        **HAM:** {ham_percent:.2f}%
+
+        **Total Messages:** {total_sms:,}
+
+        **Model Accuracy:** {accuracy * 100:.2f}%
+        """
+    )
+
+
+# ============================================================
+# MESSAGE INPUT
+# ============================================================
+
+st.markdown("---")
+
+st.markdown(
+    "## ✉️ Check Your Message"
+)
+
+
+st.write(
+    "Apna SMS neeche paste karo aur Check Message button dabao."
+)
+
+
+message = st.text_area(
+
+    "Enter your SMS",
+
+    height=150,
+
+    placeholder=
+    "Example: Congratulations! You have won a free prize. Click here to claim your reward..."
+
+)
+
+
+check_button = st.button(
+
+    "🔍 Check Message",
+
+    type="primary",
+
+    use_container_width=True
+
 )
 
 
 # ============================================================
-# 27. CONTINUOUS MESSAGE ANIMATION
+# CHECK MESSAGE
 # ============================================================
 
-def animate_message(message):
+if check_button:
 
-    safe_message = (
+    if not message.strip():
 
-        str(message)
-
-        .replace(
-            "&",
-            "&amp;"
+        st.warning(
+            "⚠️ Please enter a message first."
         )
 
-        .replace(
-            "<",
-            "&lt;"
-        )
-
-        .replace(
-            ">",
-            "&gt;"
-        )
-    )
+        st.stop()
 
 
-    html = f"""
-
-    <div style="
-
-        width:100%;
-
-        height:55px;
-
-        overflow:hidden;
-
-        border:2px solid #444;
-
-        border-radius:10px;
-
-        background:#111827;
-
-        display:flex;
-
-        align-items:center;
-
-        box-sizing:border-box;
-
-    ">
-
-
-        <div style="
-
-            white-space:nowrap;
-
-            display:inline-block;
-
-            color:white;
-
-            font-size:16px;
-
-            font-weight:bold;
-
-            padding-left:100%;
-
-            animation:
-                moveMessage
-                60s
-                linear
-                infinite;
-
-        ">
-
-            {safe_message}
-
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-
-            {safe_message}
-
-        </div>
-
-    </div>
-
-
-    <style>
-
-    @keyframes moveMessage {{
-
-        0% {{
-
-            transform:
-                translateX(0);
-
-        }}
-
-
-        100% {{
-
-            transform:
-                translateX(-50%);
-
-        }}
-
-    }}
-
-    </style>
-
-    """
-
-
-    display(
-        HTML(html)
-    )
-
-
-# ============================================================
-# 28. CHECK MESSAGE FUNCTION
-# ============================================================
-
-def check_message(message):
-
-
-    # --------------------------------------------------------
-    # MESSAGE CLEAN
-    # --------------------------------------------------------
-
-    message = str(
-        message
-    ).strip()
-
-
-    if message == "":
-
-        print(
-            "❌ Message empty hai."
-        )
-
-        return
-
-
-    # --------------------------------------------------------
-    # MODEL PREDICTION
-    # --------------------------------------------------------
+    # ========================================================
+    # MODEL PROBABILITY
+    # ========================================================
 
     probabilities = model.predict_proba(
         [message]
@@ -966,32 +668,39 @@ def check_message(message):
     ]
 
 
-    # --------------------------------------------------------
+    # ========================================================
     # KEYWORD DETECTION
-    # --------------------------------------------------------
+    # ========================================================
+
+    message_lower = message.lower()
+
 
     found_keywords = []
 
 
-    for keyword in keywords:
+    keyword_values = {}
 
-        if keyword.lower() in message.lower():
+
+    for keyword in KEYWORDS:
+
+        if keyword.lower() in message_lower:
+
+            keyword_values[keyword] = 1
 
             found_keywords.append(
                 keyword
             )
 
+        else:
 
-    keyword_count = len(
-        found_keywords
-    )
+            keyword_values[keyword] = 0
 
 
-    # --------------------------------------------------------
+    # ========================================================
     # SUSPICIOUS PATTERNS
-    # --------------------------------------------------------
+    # ========================================================
 
-    patterns = [
+    suspicious_patterns = [
 
         r"http[s]?://",
 
@@ -1037,30 +746,28 @@ def check_message(message):
     pattern_count = 0
 
 
-    for pattern in patterns:
+    for pattern in suspicious_patterns:
 
         if re.search(
 
             pattern,
 
-            message,
-
-            re.IGNORECASE
+            message_lower
 
         ):
 
             pattern_count += 1
 
 
-    # --------------------------------------------------------
-    # FINAL SPAM SCORE
-    # --------------------------------------------------------
+    # ========================================================
+    # FINAL SCORE
+    # ========================================================
 
-    extra_score = min(
+    keyword_boost = min(
 
-        pattern_count * 0.06,
+        pattern_count * 0.04,
 
-        0.30
+        0.20
 
     )
 
@@ -1068,7 +775,7 @@ def check_message(message):
     final_spam = min(
 
         spam_probability +
-        extra_score,
+        keyword_boost,
 
         0.99
 
@@ -1078,42 +785,43 @@ def check_message(message):
     final_ham = 1 - final_spam
 
 
-    # Multiple suspicious words
+    # Strong spam signal
 
     if (
 
-        keyword_count >= 4
+        pattern_count >= 4
 
         or
 
-        pattern_count >= 3
+        len(found_keywords) >= 5
 
     ):
 
         final_spam = max(
             final_spam,
-            0.75
+            0.80
+        )
+
+        final_ham = (
+            1 - final_spam
         )
 
 
-        final_ham = 1 - final_spam
-
-
-    # --------------------------------------------------------
-    # RESULT
-    # --------------------------------------------------------
+    # ========================================================
+    # FINAL RESULT
+    # ========================================================
 
     if final_spam >= 0.50:
 
         result = "SPAM"
 
-        binary = 1
+        binary_result = 1
 
     else:
 
         result = "HAM"
 
-        binary = 0
+        binary_result = 0
 
 
     confidence = max(
@@ -1126,152 +834,177 @@ def check_message(message):
 
 
     # ========================================================
-    # OUTPUT
+    # MESSAGE DISPLAY
     # ========================================================
 
-    print("\n")
-
-    print("=" * 70)
-
-    print(
-        "             SMS DETECTION RESULT"
+    st.markdown(
+        "### 📩 Your Message"
     )
 
-    print("=" * 70)
 
+    # Slow continuous animation
 
-    print("\n📩 YOUR MESSAGE:")
+    safe_message = (
 
-
-    # Continuous animation
-
-    animate_message(
         message
+
+        .replace("&", "&amp;")
+
+        .replace("<", "&lt;")
+
+        .replace(">", "&gt;")
+
     )
 
 
-    # --------------------------------------------------------
-    # RESULT
-    # --------------------------------------------------------
+    st.markdown(
 
-    print("\n")
+        f"""
+        <div style="
+            width:100%;
+            overflow:hidden;
+            background:#111827;
+            border-radius:12px;
+            border:2px solid #374151;
+            padding:15px 0;
+            margin-bottom:20px;
+        ">
 
-    print(
-        "RESULT :",
-        result
+            <div style="
+                white-space:nowrap;
+                color:#ffffff;
+                font-size:18px;
+                font-weight:600;
+                animation:
+                    scrollMessage 60s
+                    linear infinite;
+                display:inline-block;
+                padding-left:100%;
+            ">
+
+                {safe_message}
+
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+
+                {safe_message}
+
+            </div>
+
+        </div>
+
+        <style>
+
+        @keyframes scrollMessage {{
+
+            0% {{
+                transform:translateX(0);
+            }}
+
+            100% {{
+                transform:translateX(-50%);
+            }}
+
+        }}
+
+        </style>
+        """,
+
+        unsafe_allow_html=True
+
     )
 
 
-    print(
-        "BINARY :",
-        binary
-    )
+    # ========================================================
+    # RESULT BOX
+    # ========================================================
 
+    if result == "SPAM":
 
-    print(
-        "SPAM = 1 | HAM = 0"
-    )
+        st.markdown(
 
+            f"""
+            <div class="result-box spam-box">
 
-    print(
-        "\nCONFIDENCE :",
-        round(
-            confidence,
-            2
-        ),
-        "%"
-    )
+                <div class="result-text">
+                    🚨 SPAM MESSAGE
+                </div>
 
+                <div class="small-text">
+                    Binary Value: <b>1</b>
+                </div>
 
-    print("\n" + "-" * 70)
+            </div>
+            """,
 
+            unsafe_allow_html=True
 
-    print(
-        "SPAM :",
-        round(
-            final_spam * 100,
-            2
-        ),
-        "%"
-    )
-
-
-    print(
-        "HAM  :",
-        round(
-            final_ham * 100,
-            2
-        ),
-        "%"
-    )
-
-
-    # --------------------------------------------------------
-    # KEYWORDS
-    # --------------------------------------------------------
-
-    print("\n" + "-" * 70)
-
-    print(
-        "KEYWORD DETECTION"
-    )
-
-
-    print(
-        "1 = Found | 0 = Not Found"
-    )
-
-
-    # Horizontal table
-
-    keyword_row = {}
-
-
-    for keyword in keywords:
-
-        keyword_row[keyword] = (
-
-            1
-
-            if keyword.lower()
-            in message.lower()
-
-            else 0
-
-        )
-
-
-    keyword_df = pd.DataFrame(
-        [keyword_row]
-    )
-
-
-    display(
-        keyword_df
-    )
-
-
-    # --------------------------------------------------------
-    # FOUND KEYWORDS
-    # --------------------------------------------------------
-
-    print(
-        "\nDetected Keywords:"
-    )
-
-
-    if found_keywords:
-
-        print(
-            " | ".join(
-                found_keywords
-            )
         )
 
     else:
 
-        print(
-            "None"
+        st.markdown(
+
+            f"""
+            <div class="result-box ham-box">
+
+                <div class="result-text">
+                    ✅ HAM MESSAGE
+                </div>
+
+                <div class="small-text">
+                    Binary Value: <b>0</b>
+                </div>
+
+            </div>
+            """,
+
+            unsafe_allow_html=True
+
+        )
+
+
+    # ========================================================
+    # PROBABILITY
+    # ========================================================
+
+    st.markdown(
+        "### 📈 Prediction Probability"
+    )
+
+
+    p1, p2, p3 = st.columns(3)
+
+
+    with p1:
+
+        st.metric(
+
+            "🚨 SPAM",
+
+            f"{final_spam * 100:.2f}%"
+
+        )
+
+
+    with p2:
+
+        st.metric(
+
+            "✅ HAM",
+
+            f"{final_ham * 100:.2f}%"
+
+        )
+
+
+    with p3:
+
+        st.metric(
+
+            "🎯 Confidence",
+
+            f"{confidence:.2f}%"
+
         )
 
 
@@ -1279,64 +1012,153 @@ def check_message(message):
     # PIE CHART
     # ========================================================
 
-    print(
-        "\n📊 SPAM vs HAM"
+    st.markdown(
+        "### 🥧 Message Result"
     )
 
 
-    plt.figure(
-        figsize=(2.8, 2.8)
+    chart_col1, chart_col2 = st.columns(
+        [1, 2]
     )
 
 
-    plt.pie(
+    with chart_col1:
+
+        fig2, ax2 = plt.subplots(
+
+            figsize=(3, 3)
+
+        )
+
+
+        ax2.pie(
+
+            [
+
+                final_spam,
+
+                final_ham
+
+            ],
+
+            labels=[
+
+                f"SPAM\n{final_spam*100:.1f}%",
+
+                f"HAM\n{final_ham*100:.1f}%"
+
+            ],
+
+            autopct="%1.1f%%",
+
+            startangle=90
+
+        )
+
+
+        ax2.axis("equal")
+
+
+        ax2.set_title(
+            "Message Type",
+            fontsize=11
+        )
+
+
+        st.pyplot(
+            fig2,
+            use_container_width=False
+        )
+
+
+    with chart_col2:
+
+        st.markdown(
+            f"""
+            ### Detection Details
+
+            **Result:** {result}
+
+            **Binary:** {binary_result}
+
+            **SPAM:** {final_spam*100:.2f}%
+
+            **HAM:** {final_ham*100:.2f}%
+
+            **Keywords Found:** {len(found_keywords)}
+
+            **Suspicious Patterns:** {pattern_count}
+            """
+        )
+
+
+    # ========================================================
+    # KEYWORDS
+    # ========================================================
+
+    st.markdown("---")
+
+    st.markdown(
+        "### 🔎 Keyword Detection"
+    )
+
+
+    if found_keywords:
+
+        st.success(
+            "Detected Keywords: "
+            +
+            " | ".join(
+                found_keywords
+            )
+        )
+
+    else:
+
+        st.info(
+            "No suspicious keywords detected."
+        )
+
+
+    # ========================================================
+    # 0 / 1 KEYWORD TABLE
+    # ========================================================
+
+    keyword_df = pd.DataFrame(
 
         [
-
-            final_spam,
-
-            final_ham
-
-        ],
-
-        labels=[
-
-            f"SPAM\n{final_spam*100:.1f}%",
-
-            f"HAM\n{final_ham*100:.1f}%"
-
-        ],
-
-        autopct="%1.1f%%",
-
-        startangle=90
+            keyword_values
+        ]
 
     )
 
 
-    plt.title(
-        "Message Result",
-        fontsize=10
+    st.markdown(
+        "### 0 / 1 Keyword Indicators"
     )
 
 
-    plt.axis("equal")
+    st.caption(
+        "1 = keyword found | 0 = keyword not found"
+    )
 
-    plt.tight_layout()
 
-    plt.show()
+    st.dataframe(
+
+        keyword_df,
+
+        use_container_width=True,
+
+        hide_index=True
+
+    )
 
 
     # ========================================================
-    # SAVE RESULT
+    # DOWNLOAD RESULT
     # ========================================================
 
-    result_file = (
-        "SMS_Prediction_Results.xlsx"
-    )
-
-
-    new_result = pd.DataFrame([{
+    result_row = {
 
         "Message":
             message,
@@ -1345,15 +1167,15 @@ def check_message(message):
             result,
 
         "Binary":
-            binary,
+            binary_result,
 
-        "SPAM_%":
+        "Spam_%":
             round(
                 final_spam * 100,
                 2
             ),
 
-        "HAM_%":
+        "Ham_%":
             round(
                 final_ham * 100,
                 2
@@ -1365,138 +1187,129 @@ def check_message(message):
                 2
             ),
 
-        "Keyword_Count":
-            keyword_count,
+        "Keywords_Found":
+            len(found_keywords),
 
         "Detected_Keywords":
             ", ".join(
                 found_keywords
             )
 
-    }])
+    }
 
 
-    if os.path.exists(
-        result_file
-    ):
-
-        old_result = pd.read_excel(
-            result_file
-        )
+    result_df = pd.DataFrame(
+        [result_row]
+    )
 
 
-        final_result = pd.concat(
-
-            [
-                old_result,
-                new_result
-            ],
-
-            ignore_index=True
-        )
-
-    else:
-
-        final_result = new_result
-
-
-    final_result.to_excel(
-
-        result_file,
-
+    csv_data = result_df.to_csv(
         index=False
     )
 
 
-    print(
-        "\n✅ Prediction Excel mein save ho gaya:"
-    )
+    st.download_button(
 
+        label="⬇️ Download Prediction",
 
-    print(
-        os.path.abspath(
-            result_file
-        )
+        data=csv_data,
+
+        file_name="SMS_Prediction.csv",
+
+        mime="text/csv",
+
+        use_container_width=True
+
     )
 
 
 # ============================================================
-# 29. SAVE CLEAN DATASET
+# SIDEBAR
 # ============================================================
 
-data.to_excel(
+with st.sidebar:
 
-    "SMS_Spam_Processed_Data.xlsx",
-
-    index=False
-
-)
+    st.title(
+        "📱 About"
+    )
 
 
-print("\n" + "=" * 70)
+    st.write(
+        """
+        This application uses
+        Machine Learning to classify
+        SMS messages.
+        """
+    )
 
-print(
-    "          🚀 MODEL READY"
-)
 
-print("=" * 70)
+    st.markdown(
+        """
+        ### Classification
+
+        **SPAM = 1**
+
+        **HAM = 0**
+
+        ### Model
+
+        • TF-IDF
+
+        • Logistic Regression
+
+        • Keyword Analysis
+
+        ### Dataset
+
+        SMS Spam Collection
+        """
+    )
 
 
-print(
+    st.markdown("---")
+
+
+    st.write(
+        f"📄 Dataset Messages: {total_sms:,}"
+    )
+
+
+    st.write(
+        f"🚨 Spam: {spam_count:,}"
+    )
+
+
+    st.write(
+        f"✅ Ham: {ham_count:,}"
+    )
+
+
+    st.write(
+        f"🎯 Accuracy: {accuracy*100:.2f}%"
+    )
+
+
+# ============================================================
+# FOOTER
+# ============================================================
+
+st.markdown("---")
+
+st.markdown(
+
     """
-Ab apna SMS neeche paste karo.
+    <div style="
+        text-align:center;
+        color:#777;
+        padding:10px;
+    ">
 
-Example:
+        SMS Spam Detection App |
+        Machine Learning Project
 
-Congratulations! You have won a free prize.
-Click here to claim your reward.
+    </div>
+    """,
 
-Ya:
+    unsafe_allow_html=True
 
-Hey, are you coming to college today?
-
-Program band karne ke liye:
-
-exit
-"""
 )
-
-
-# ============================================================
-# 30. MESSAGE INPUT
-# ============================================================
-
-while True:
-
-    user_message = input(
-        "\n📩 Paste Your Message: "
-    )
-
-
-    # EXIT
-
-    if user_message.strip().lower() == "exit":
-
-        print(
-            "\n✅ Program closed."
-        )
-
-        break
-
-
-    # EMPTY
-
-    if user_message.strip() == "":
-
-        print(
-            "❌ Please enter a message."
-        )
-
-        continue
-
-
-    # CHECK
-
-    check_message(
-        user_message
-    )
